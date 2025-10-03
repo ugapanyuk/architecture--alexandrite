@@ -1,2 +1,3 @@
-# architecture--alexandrite
-yandex-architecture-sprint-6
+# Решение спринта 6
+
+В соответствии с заданием решения представлены в папках Task1 - Task5.

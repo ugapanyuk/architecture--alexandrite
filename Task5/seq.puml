@@ -1,0 +1,52 @@
+@startuml
+title Диаграмма последовательности
+
+actor Оператор
+participant "MES Фронтенд" as FE
+participant "MES API" as API
+participant "Кеш (Redis)" as Cache
+database "БД MES" as DB
+
+box "Сценарий 1: Чтение списка заказов" #LightBlue
+    Оператор -> FE: Запросить заказы со статусом "НОВЫЙ"
+    FE -> API: GET /api/orders?status=NEW
+
+    alt Данные есть в кеше (Cache Hit)
+        API -> Cache: GET "orders:status:НОВЫЙ"
+        Cache --> API: [Список заказов из кеша]
+        API --> FE: [Список заказов из кеша]
+        FE --> Оператор: Отобразить быстро загруженный список
+    else Данных в кеше нет (Cache Miss)
+        API -> Cache: GET "orders:status:НОВЫЙ"
+        Cache --> API: null
+        note right of API: Данных в кеше нет
+
+        API -> DB: SELECT * FROM orders WHERE status = 'NEW' ORDER BY created_at DESC;
+        DB --> API: [Список заказов]
+
+        API -> Cache: SET "orders:status:НОВЫЙ", [Список заказов], TTL=30с
+        Cache --> API: OK
+
+        API --> FE: [Список заказов]
+        FE --> Оператор: Отобразить список
+    end
+end box
+
+box "Сценарий 2: Обновление статуса заказа" #LightGreen
+    Оператор -> FE: Взять заказ "order-123" в работу
+    FE -> API: POST /api/orders/order-123/status {"status": "MANUFACTURING_STARTED"}
+
+    API -> DB: UPDATE orders SET status = 'MANUFACTURING_STARTED' WHERE id = 'order-123';
+    DB --> API: Успешно
+
+    note right of API: Инвалидировать кеш для затронутых списков
+    API -> Cache: DEL "orders:status:MANUFACTURING_APPROVED"
+    Cache --> API: OK
+    API -> Cache: DEL "orders:status:MANUFACTURING_STARTED"
+    Cache --> API: OK
+
+    API --> FE: { "status": "Успешно" }
+    FE --> Operator: Показать подтверждение
+end box
+
+@enduml
